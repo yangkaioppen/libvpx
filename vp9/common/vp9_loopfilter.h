@@ -133,6 +133,9 @@ void vp9_build_mask(struct VP9Common *cm, const MODE_INFO *mi, int mi_row,
                     int mi_col, int bw, int bh);
 void vp9_adjust_mask(struct VP9Common *const cm, const int mi_row,
                      const int mi_col, LOOP_FILTER_MASK *lfm);
+void vp9_adjust_mask_tile(struct VP9Common *const cm, const int mi_row,
+                     const int mi_col, const int mi_col_start,
+                     const int mi_col_stop, LOOP_FILTER_MASK *lfm);
 void vp9_build_mask_frame(struct VP9Common *cm, int frame_filter_level,
                           int partial_frame);
 void vp9_reset_lfm(struct VP9Common *const cm);
@@ -145,6 +148,9 @@ typedef struct LoopFilterWorkerData {
   int start;
   int stop;
   int y_only;
+  // by YK: when decoding by tile, left and right borders of a tile should not be loop-filtered
+  int col_start;
+  int col_stop;
 } LFWorkerData;
 
 void vp9_loop_filter_data_reset(
@@ -153,6 +159,10 @@ void vp9_loop_filter_data_reset(
 
 // Operates on the rows described by 'arg1' (cast to LFWorkerData *).
 int vp9_loop_filter_worker(void *arg1, void *unused);
+
+// by YK: Operates on the tile describe by 'arg1' (cast to LFWrokerData *).
+int vp9_loop_filter_worker_tile(void *arg1, void *unused);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

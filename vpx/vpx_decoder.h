@@ -109,6 +109,18 @@ typedef struct vpx_codec_dec_cfg {
   unsigned int h;       /**< Height */
 } vpx_codec_dec_cfg_t;  /**< alias for struct vpx_codec_dec_cfg */
 
+/*!\brief Tile info
+ *
+ * This structure is used when decoding selected tiles in a frame
+ */
+typedef struct vpx_compressed_tile_info
+{
+  int tile_row;
+  int tile_col;
+  int offset;
+  int size;
+} vpx_compressed_tile_info_t;
+
 /*!\brief Initialize a decoder instance
  *
  * Initializes a decoder context using the given interface. Applications
@@ -215,6 +227,15 @@ vpx_codec_err_t vpx_codec_decode(vpx_codec_ctx_t *ctx, const uint8_t *data,
                                  unsigned int data_sz, void *user_priv,
                                  long deadline);
 
+/*!brief Decode selected tiles in a frame or get tile offsets and sizes in a frame
+ * see vpx_codec_decode_with_tile_info_fn_t
+ */
+vpx_codec_err_t vpx_codec_decode_with_tile_info(vpx_codec_ctx_t *ctx, const uint8_t *data,
+                                 unsigned int data_sz, void *user_priv,
+                                 long deadline, size_t *tile_offset_size,
+                                 const vpx_compressed_tile_info_t *tinfo,
+                                 int num_tinfo);
+
 /*!\brief Decoded frames iterator
  *
  * Iterates over a list of the frames available for display. The iterator
@@ -232,6 +253,13 @@ vpx_codec_err_t vpx_codec_decode(vpx_codec_ctx_t *ctx, const uint8_t *data,
  *         produced will always be in PTS (presentation time stamp) order.
  */
 vpx_image_t *vpx_codec_get_frame(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter);
+
+/*!brief get the image of a selected tile in the previousle decoded frame
+ *
+ * see vpx_codec_get_frame_tile_fn_t
+ */
+vpx_image_t *vpx_codec_get_frame_tile(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter,
+                                const vpx_compressed_tile_info_t *tinfo);
 
 /*!\defgroup cap_put_frame Frame-Based Decoding Functions
  *

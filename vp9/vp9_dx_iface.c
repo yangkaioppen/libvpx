@@ -293,7 +293,10 @@ static INLINE void check_resync(vpx_codec_alg_priv_t *const ctx,
 
 static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
                                   const uint8_t **data, unsigned int data_sz,
-                                  void *user_priv, int64_t deadline) {
+                                  void *user_priv, int64_t deadline,
+                                  size_t *tile_offset_size,
+                                  const vpx_compressed_tile_info_t *tinfo,
+                                  int num_tinfo) {
   (void)deadline;
 
   // Determine the stream parameters. Note that we rely on peek_si to
@@ -316,7 +319,7 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
   ctx->pbi->decrypt_cb = ctx->decrypt_cb;
   ctx->pbi->decrypt_state = ctx->decrypt_state;
 
-  if (vp9_receive_compressed_data(ctx->pbi, data_sz, data)) {
+  if (vp9_receive_compressed_data(ctx->pbi, data_sz, data, tile_offset_size, tinfo, num_tinfo)) {
     ctx->pbi->cur_buf->buf.corrupted = 1;
     ctx->pbi->need_resync = 1;
     ctx->need_resync = 1;
@@ -328,9 +331,12 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
   return VPX_CODEC_OK;
 }
 
-static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
+static vpx_codec_err_t decoder_decode_with_tile_info(vpx_codec_alg_priv_t *ctx,
                                       const uint8_t *data, unsigned int data_sz,
-                                      void *user_priv, long deadline) {
+                                      void *user_priv, long deadline,
+                                      size_t *tile_offset_size,
+                                      const vpx_compressed_tile_info_t *tinfo,
+                                      int num_tinfo) {
   const uint8_t *data_start = data;
   const uint8_t *const data_end = data + data_sz;
   vpx_codec_err_t res;
@@ -351,6 +357,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     if (res != VPX_CODEC_OK) return res;
   }
 
+  if (tile_offset_size != NULL && tinfo != NULL) {
+    // if one tile is specified, tile offset and size info can not be fetched
+    vpx_internal_error(&ctx->pbi->common.error, VPX_CODEC_ERROR,
+      "if a tile is specified, tile info can not be fetched");
+    return VPX_CODEC_ERROR;
+  }
+
+
   res = vp9_parse_superframe_index(data, data_sz, frame_sizes, &frame_count,
                                    ctx->decrypt_cb, ctx->decrypt_state);
   if (res != VPX_CODEC_OK) return res;
@@ -358,42 +372,55 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
   if (ctx->svc_decoding && ctx->svc_spatial_layer < frame_count - 1)
     frame_count = ctx->svc_spatial_layer + 1;
 
-  // Decode in serial mode.
-  if (frame_count > 0) {
-    int i;
+  if (tinfo == NULL) {
+    // Decode in serial mode.
+    if (frame_count > 0) {
+      int i;
 
-    for (i = 0; i < frame_count; ++i) {
-      const uint8_t *data_start_copy = data_start;
-      const uint32_t frame_size = frame_sizes[i];
-      vpx_codec_err_t res;
-      if (data_start < data || frame_size > (uint32_t)(data_end - data_start)) {
-        set_error_detail(ctx, "Invalid frame size in index");
-        return VPX_CODEC_CORRUPT_FRAME;
+      for (i = 0; i < frame_count; ++i) {
+        const uint8_t *data_start_copy = data_start;
+        const uint32_t frame_size = frame_sizes[i];
+        if (data_start < data || frame_size > (uint32_t)(data_end - data_start)) {
+          set_error_detail(ctx, "Invalid frame size in index");
+          return VPX_CODEC_CORRUPT_FRAME;
+        }
+
+        res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline, tile_offset_size,
+          tinfo, num_tinfo);
+        if (res != VPX_CODEC_OK) return res;
+
+        data_start += frame_size;
       }
+    } else {
+      while (data_start < data_end) {
+        const uint32_t frame_size = (uint32_t)(data_end - data_start);
+        res = decode_one(ctx, &data_start, frame_size, user_priv, deadline, tile_offset_size,
+          tinfo, num_tinfo);
+        if (res != VPX_CODEC_OK) return res;
 
-      res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
-      if (res != VPX_CODEC_OK) return res;
-
-      data_start += frame_size;
+        // Account for suboptimal termination by the encoder.
+        while (data_start < data_end) {
+          const uint8_t marker =
+              read_marker(ctx->decrypt_cb, ctx->decrypt_state, data_start);
+          if (marker) break;
+          ++data_start;
+        }
+      }
     }
   } else {
-    while (data_start < data_end) {
-      const uint32_t frame_size = (uint32_t)(data_end - data_start);
-      const vpx_codec_err_t res =
-          decode_one(ctx, &data_start, frame_size, user_priv, deadline);
-      if (res != VPX_CODEC_OK) return res;
-
-      // Account for suboptimal termination by the encoder.
-      while (data_start < data_end) {
-        const uint8_t marker =
-            read_marker(ctx->decrypt_cb, ctx->decrypt_state, data_start);
-        if (marker) break;
-        ++data_start;
-      }
-    }
+    const uint32_t frame_size = (uint32_t)(data_end - data_start);
+    res = decode_one(ctx, &data_start, frame_size, user_priv, deadline, tile_offset_size,
+      tinfo, num_tinfo);
   }
 
   return res;
+}
+
+static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
+                                      const uint8_t *data, unsigned int data_sz,
+                                      void *user_priv, long deadline) {
+
+  return decoder_decode_with_tile_info(ctx, data, data_sz, user_priv, deadline, NULL, NULL, 0);
 }
 
 static vpx_image_t *decoder_get_frame(vpx_codec_alg_priv_t *ctx,
@@ -417,6 +444,76 @@ static vpx_image_t *decoder_get_frame(vpx_codec_alg_priv_t *ctx,
       ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
       img = &ctx->img;
       return img;
+    }
+  }
+  return NULL;
+}
+
+static vpx_image_t *decoder_get_frame_tile(vpx_codec_alg_priv_t *ctx,
+                                      vpx_codec_iter_t *iter,
+                                      const vpx_compressed_tile_info_t *tinfo) {
+  vpx_image_t *img = NULL;
+
+  if (tinfo == NULL) {
+    return NULL;
+  }
+
+  // Legacy parameter carried over from VP8. Has no effect for VP9 since we
+  // always return only 1 frame per decode call.
+  (void)iter;
+
+  if (ctx->pbi != NULL) {
+    VP9_COMMON *const cm = &ctx->pbi->common;
+    // only support 8-bit depth
+    if (cm->profile != PROFILE_2 && cm->profile != PROFILE_3) {
+      YV12_BUFFER_CONFIG sd;
+      vp9_ppflags_t flags = { 0, 0, 0 };
+      if (ctx->base.init_flags & VPX_CODEC_USE_POSTPROC) set_ppflags(ctx, &flags);
+      if (vp9_get_raw_frame(ctx->pbi, &sd, &flags) == 0) {
+
+        // set tile rect as visible region
+        int tile_row = tinfo->tile_row;
+        int tile_col = tinfo->tile_col;
+        int tile_cols = 1 << cm->log2_tile_cols;
+        int tile_rows = 1 << cm->log2_tile_rows;
+        if (tile_row < 0 || tile_row >= tile_rows ||
+          tile_col < 0 || tile_col >= tile_cols) {
+          return NULL;
+        }
+
+        const TileWorkerData *twd = ctx->pbi->tile_worker_data + tile_row * tile_cols + tile_col;
+        const TileInfo *ti = &twd->xd.tile;
+        int row_start_pxl = ti->mi_row_start * MI_SIZE;
+        int row_end_pxl = ti->mi_row_end * MI_SIZE;
+        int col_start_pxl = ti->mi_col_start * MI_SIZE;
+        int col_end_pxl = ti->mi_col_end * MI_SIZE;
+
+        // vpx_img_set_rect(img, col_start_pxl, row_start_pxl,
+        //   col_end_pxl - col_start_pxl, row_end_pxl - row_start_pxl);
+
+        // adjust sd
+        int tile_w_pxl = col_end_pxl - col_start_pxl;
+        int tile_h_pxl = row_end_pxl - row_start_pxl;
+        sd.y_crop_width = tile_w_pxl;
+        sd.y_crop_height = tile_h_pxl;
+        sd.y_buffer +=  col_start_pxl; /* 1 byte per Y */
+        if (sd.subsampling_x) {
+          sd.u_buffer += (col_start_pxl >> 1);
+          sd.v_buffer += (col_start_pxl >> 1);
+        } else {
+          sd.u_buffer += col_start_pxl;
+          sd.v_buffer += col_start_pxl;
+        }
+
+        RefCntBuffer *const frame_bufs = cm->buffer_pool->frame_bufs;
+        ctx->last_show_frame = ctx->pbi->common.new_fb_idx;
+        if (ctx->need_resync) return NULL;
+        yuvconfig2image(&ctx->img, &sd, ctx->user_priv);
+        ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
+        img = &ctx->img;
+
+        return img;
+      }
     }
   }
   return NULL;
@@ -717,7 +814,9 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
       decoder_peek_si,    // vpx_codec_peek_si_fn_t
       decoder_get_si,     // vpx_codec_get_si_fn_t
       decoder_decode,     // vpx_codec_decode_fn_t
+      decoder_decode_with_tile_info,
       decoder_get_frame,  // vpx_codec_frame_get_fn_t
+      decoder_get_frame_tile,
       decoder_set_fb_fn,  // vpx_codec_set_fb_fn_t
   },
   {

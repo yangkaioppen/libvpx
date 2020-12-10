@@ -120,6 +120,28 @@ vpx_codec_err_t vpx_codec_decode(vpx_codec_ctx_t *ctx, const uint8_t *data,
   return SAVE_STATUS(ctx, res);
 }
 
+vpx_codec_err_t vpx_codec_decode_with_tile_info(vpx_codec_ctx_t *ctx, const uint8_t *data,
+                                 unsigned int data_sz, void *user_priv,
+                                 long deadline,
+                                 size_t *tile_offset_size,
+                                 const vpx_compressed_tile_info_t *tinfo,
+                                 int num_tinfo) {
+  vpx_codec_err_t res;
+
+  /* Sanity checks */
+  /* NULL data ptr allowed if data_sz is 0 too */
+  if (!ctx || (!data && data_sz) || (data && !data_sz))
+    res = VPX_CODEC_INVALID_PARAM;
+  else if (!ctx->iface || !ctx->priv)
+    res = VPX_CODEC_ERROR;
+  else {
+    res = ctx->iface->dec.decode_with_tile_info(get_alg_priv(ctx), data, data_sz, user_priv,
+                                 deadline, tile_offset_size, tinfo, num_tinfo);
+  }
+
+  return SAVE_STATUS(ctx, res);
+}
+
 vpx_image_t *vpx_codec_get_frame(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter) {
   vpx_image_t *img;
 
@@ -128,6 +150,17 @@ vpx_image_t *vpx_codec_get_frame(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter) {
   else
     img = ctx->iface->dec.get_frame(get_alg_priv(ctx), iter);
 
+  return img;
+}
+
+vpx_image_t *vpx_codec_get_frame_tile(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter,
+                                const vpx_compressed_tile_info_t *tinfo) {
+  vpx_image_t *img;
+  if (!ctx || !iter || !ctx->iface || !ctx->priv || !tinfo) {
+    return NULL;
+  } else {
+    img = ctx->iface->dec.get_frame_tile(get_alg_priv(ctx), iter, tinfo);
+  }
   return img;
 }
 

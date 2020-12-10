@@ -405,7 +405,10 @@ static void release_fb_on_decoder_exit(VP9Decoder *pbi) {
 }
 
 int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
-                                const uint8_t **psource) {
+                                const uint8_t **psource,
+                                size_t *tile_offset_size,
+                                const vpx_compressed_tile_info_t *tinfo,
+                                int num_tinfo) {
   VP9_COMMON *volatile const cm = &pbi->common;
   BufferPool *volatile const pool = cm->buffer_pool;
   RefCntBuffer *volatile const frame_bufs = cm->buffer_pool->frame_bufs;
@@ -466,8 +469,12 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
   }
 
   cm->error.setjmp = 1;
-  vp9_decode_frame(pbi, source, source + size, psource);
 
+  if (tinfo != NULL) {
+    vp9_decode_tiles_in_frame(pbi, source, source + size, tinfo, num_tinfo);
+  } else {
+    vp9_decode_frame(pbi, source, source + size, psource, tile_offset_size);
+  }
   swap_frame_buffers(pbi);
 
   vpx_clear_system_state();

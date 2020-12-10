@@ -270,9 +270,12 @@ static int update_fragments(vpx_codec_alg_priv_t *ctx, const uint8_t *data,
   return 1;
 }
 
-static vpx_codec_err_t vp8_decode(vpx_codec_alg_priv_t *ctx,
+static vpx_codec_err_t vp8_decode_with_tile_info(vpx_codec_alg_priv_t *ctx,
                                   const uint8_t *data, unsigned int data_sz,
-                                  void *user_priv, long deadline) {
+                                  void *user_priv, long deadline,
+                                  size_t *tile_offset_size,
+                                  const vpx_compressed_tile_info_t *tinfo,
+                                  int num_tinfo) {
   volatile vpx_codec_err_t res;
   volatile unsigned int resolution_change = 0;
   unsigned int w, h;
@@ -497,6 +500,12 @@ static vpx_codec_err_t vp8_decode(vpx_codec_alg_priv_t *ctx,
   return res;
 }
 
+static vpx_codec_err_t vp8_decode(vpx_codec_alg_priv_t *ctx,
+                                  const uint8_t *data, unsigned int data_sz,
+                                  void *user_priv, long deadline) {
+  vp8_decode_with_tile_info(ctx, data, data_sz, user_priv, deadline, NULL, NULL, 0);
+}
+
 static vpx_image_t *vp8_get_frame(vpx_codec_alg_priv_t *ctx,
                                   vpx_codec_iter_t *iter) {
   vpx_image_t *img = NULL;
@@ -715,7 +724,9 @@ CODEC_INTERFACE(vpx_codec_vp8_dx) = {
       vp8_peek_si,   /* vpx_codec_peek_si_fn_t    peek_si; */
       vp8_get_si,    /* vpx_codec_get_si_fn_t     get_si; */
       vp8_decode,    /* vpx_codec_decode_fn_t     decode; */
+      vp8_decode_with_tile_info,
       vp8_get_frame, /* vpx_codec_frame_get_fn_t  frame_get; */
+      NULL,
       NULL,
   },
   {

@@ -712,6 +712,18 @@ enum vp8e_enc_control_id {
    * Supported in codecs: VP9
    */
   VP9E_SET_EXTERNAL_RATE_CONTROL,
+
+  /*!\brief Codec control function to get number of tile rows
+  *
+  * Supported in codecs: VP9
+  */
+  VP9E_GET_TILE_ROWS,
+
+  /*!\brief Codec control function to get number of tile columns
+  *
+  * Supported in codecs: VP9
+  */
+  VP9E_GET_TILE_COLUMNS
 };
 
 /*!\brief vpx 1-D scaling mode
@@ -1070,6 +1082,12 @@ VPX_CTRL_USE_TYPE(VP9E_SET_DISABLE_LOOPFILTER, int)
 
 VPX_CTRL_USE_TYPE(VP9E_SET_EXTERNAL_RATE_CONTROL, vpx_rc_funcs_t *)
 #define VPX_CTRL_VP9E_SET_EXTERNAL_RATE_CONTROL
+
+VPX_CTRL_USE_TYPE(VP9E_GET_TILE_ROWS, int *)
+#define VPX_CTRL_VP9E_GET_TILE_ROWS
+
+VPX_CTRL_USE_TYPE(VP9E_GET_TILE_COLUMNS, int *)
+#define VPX_CTRL_VP9E_GET_TILE_COLUMNS
 
 /*!\endcond */
 /*! @} - end defgroup vp8_encoder */

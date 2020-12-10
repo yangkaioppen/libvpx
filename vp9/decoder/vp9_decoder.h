@@ -14,6 +14,7 @@
 #include "./vpx_config.h"
 
 #include "vpx/vpx_codec.h"
+#include "vpx/vpx_decoder.h"
 #include "vpx_dsp/bitreader.h"
 #include "vpx_scale/yv12config.h"
 #include "vpx_util/vpx_thread.h"
@@ -127,7 +128,8 @@ typedef struct VP9Decoder {
 } VP9Decoder;
 
 int vp9_receive_compressed_data(struct VP9Decoder *pbi, size_t size,
-                                const uint8_t **psource);
+                                const uint8_t **psource, size_t *tile_offset_size,
+                                const vpx_compressed_tile_info_t *tinfo, int num_tinfo);
 
 int vp9_get_raw_frame(struct VP9Decoder *pbi, YV12_BUFFER_CONFIG *sd,
                       vp9_ppflags_t *flags);

@@ -199,6 +199,48 @@ typedef vpx_codec_err_t (*vpx_codec_decode_fn_t)(vpx_codec_alg_priv_t *ctx,
                                                  void *user_priv,
                                                  long deadline);
 
+/*!\brief decode data function pointer prototype
+ *
+ * Processes a buffer of coded data. If the processing results in a new
+ * decoded frame becoming available, put_slice and put_frame callbacks
+ * are invoked as appropriate. This function is called by the generic
+ * vpx_codec_decode() wrapper function, so plugins implementing this
+ * interface may trust the input parameters to be properly initialized.
+ *
+ * \param[in] ctx          Pointer to this instance's context
+ * \param[in] data         Pointer to this block of new coded data. If
+ *                         NULL, the put_frame callback is invoked for
+ *                         the previously decoded frame.
+ * \param[in] data_sz      Size of the coded data, in bytes.
+ *
+ * \param[out] tile_offset_size  If not NULL, tile offsets and sizes will be decoded and stored,
+ *                               and no color will be decoded.
+ *                               If tinfo is not NULL, this param should be NULL.
+ *
+ * \param[in] tinfo        Pointer to tile info of those should be decoded.
+ *                         If tile_offset_size is not NULL, this param should be NULL
+ *
+ * \param[in] num_tinfo    size of array tinfo
+ *
+ * \return Returns #VPX_CODEC_OK if the coded data was processed completely
+ *         and future pictures can be decoded without error. Otherwise,
+ *         see the descriptions of the other error codes in ::vpx_codec_err_t
+ *         for recoverability capabilities.
+ *
+ *         if tinfo is not NULL and num_tinfo is 1, the image of the corresponding tile decoded
+ *         can be fetched by vpx_codec_get_frame_tile; Otherwise, i.e., num_tinfo is greater than 1,
+ *         you should call vpx_codec_get_frame to get the whole frame and pick the corresponding tiles manually
+ */
+typedef vpx_codec_err_t (*vpx_codec_decode_with_tile_info_fn_t)(vpx_codec_alg_priv_t *ctx,
+                                                 const uint8_t *data,
+                                                 unsigned int data_sz,
+                                                 void *user_priv,
+                                                 long deadline,
+                                                 size_t *tile_offset_size,
+                                                 const vpx_compressed_tile_info_t *tinfo,
+                                                 int num_tinfo);
+
+
 /*!\brief Decoded frames iterator
  *
  * Iterates over a list of the frames available for display. The iterator
@@ -217,6 +259,27 @@ typedef vpx_codec_err_t (*vpx_codec_decode_fn_t)(vpx_codec_alg_priv_t *ctx,
  */
 typedef vpx_image_t *(*vpx_codec_get_frame_fn_t)(vpx_codec_alg_priv_t *ctx,
                                                  vpx_codec_iter_t *iter);
+
+/*!\brief Decoded frames iterator
+ *
+ * Iterates over a list of the frames available for display. The iterator
+ * storage should be initialized to NULL to start the iteration. Iteration is
+ * complete when this function returns NULL.
+ *
+ * The list of available frames becomes valid upon completion of the
+ * vpx_codec_decode call, and remains valid until the next call to
+ * vpx_codec_decode.
+ *
+ * \param[in]     ctx      Pointer to this instance's context
+ * \param[in out] iter     Iterator storage, initialized to NULL
+ * \param[in]     tinfo    Pointer to tile info
+ *
+ * \return Returns a pointer to an image of the tile, if one is ready for display. Frames
+ *         produced will always be in PTS (presentation time stamp) order.
+ */
+typedef vpx_image_t *(*vpx_codec_get_frame_tile_fn_t)(vpx_codec_alg_priv_t *ctx,
+                                                 vpx_codec_iter_t *iter,
+                                                 const vpx_compressed_tile_info_t *tinfo);
 
 /*!\brief Pass in external frame buffers for the decoder to use.
  *
@@ -298,8 +361,12 @@ struct vpx_codec_iface {
     vpx_codec_peek_si_fn_t peek_si; /**< \copydoc ::vpx_codec_peek_si_fn_t */
     vpx_codec_get_si_fn_t get_si;   /**< \copydoc ::vpx_codec_get_si_fn_t */
     vpx_codec_decode_fn_t decode;   /**< \copydoc ::vpx_codec_decode_fn_t */
+    vpx_codec_decode_with_tile_info_fn_t
+        decode_with_tile_info;      /**< \copydoc ::vpx_codec_decode_with_tile_info_fn_t */
     vpx_codec_get_frame_fn_t
         get_frame;                   /**< \copydoc ::vpx_codec_get_frame_fn_t */
+    vpx_codec_get_frame_tile_fn_t
+        get_frame_tile;              /**< \copydoc ::vpx_codec_get_frame_tile_fn_t */
     vpx_codec_set_fb_fn_t set_fb_fn; /**< \copydoc ::vpx_codec_set_fb_fn_t */
   } dec;
   struct vpx_codec_enc_iface {

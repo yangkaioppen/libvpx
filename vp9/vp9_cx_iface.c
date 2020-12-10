@@ -1756,6 +1756,28 @@ static vpx_codec_err_t ctrl_set_external_rate_control(vpx_codec_alg_priv_t *ctx,
   return VPX_CODEC_OK;
 }
 
+static vpx_codec_err_t ctrl_get_tile_rows(vpx_codec_alg_priv_t *ctx,
+                                           va_list args) {
+  int *ptr_tile_rows = va_arg(args, int *);
+
+  if (ptr_tile_rows) {
+    *ptr_tile_rows = 1 << (ctx->cpi->common.log2_tile_rows);
+    return VPX_CODEC_OK;
+  }
+  return VPX_CODEC_INVALID_PARAM;
+}
+
+static vpx_codec_err_t ctrl_get_tile_columns(vpx_codec_alg_priv_t *ctx,
+                                            va_list args) {
+  int *ptr_tile_cols = va_arg(args, int *);
+
+  if (ptr_tile_cols) {
+    *ptr_tile_cols = 1 << (ctx->cpi->common.log2_tile_cols);
+    return VPX_CODEC_OK;
+  }
+  return VPX_CODEC_INVALID_PARAM;
+}
+
 static vpx_codec_ctrl_fn_map_t encoder_ctrl_maps[] = {
   { VP8_COPY_REFERENCE, ctrl_copy_reference },
 
@@ -1818,6 +1840,8 @@ static vpx_codec_ctrl_fn_map_t encoder_ctrl_maps[] = {
   { VP9E_GET_ACTIVEMAP, ctrl_get_active_map },
   { VP9E_GET_LEVEL, ctrl_get_level },
   { VP9E_GET_SVC_REF_FRAME_CONFIG, ctrl_get_svc_ref_frame_config },
+  { VP9E_GET_TILE_ROWS, ctrl_get_tile_rows },
+  { VP9E_GET_TILE_COLUMNS, ctrl_get_tile_columns },
 
   { -1, NULL },
 };
@@ -1904,7 +1928,9 @@ CODEC_INTERFACE(vpx_codec_vp9_cx) = {
       NULL,  // vpx_codec_peek_si_fn_t
       NULL,  // vpx_codec_get_si_fn_t
       NULL,  // vpx_codec_decode_fn_t
+      NULL,
       NULL,  // vpx_codec_frame_get_fn_t
+      NULL,
       NULL   // vpx_codec_set_fb_fn_t
   },
   {

@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+#include "vpx/vpx_decoder.h"
 #include "vp9/common/vp9_enums.h"
 
 struct VP9Decoder;
@@ -26,7 +27,18 @@ void vp9_read_frame_size(struct vpx_read_bit_buffer *rb, int *width,
 BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb);
 
 void vp9_decode_frame(struct VP9Decoder *pbi, const uint8_t *data,
-                      const uint8_t *data_end, const uint8_t **p_data_end);
+                      const uint8_t *data_end, const uint8_t **p_data_end,
+                      // tile 0 offset, tile 0 size, tile 1 offset, tile 1 size, ...
+                      size_t *tile_offset_size);
+
+void vp9_decode_tiles_in_frame(struct VP9Decoder *pbi, const uint8_t *data,
+                      const uint8_t *data_end,
+                      const vpx_compressed_tile_info_t* tinfo,
+                      int num_tinfo);
+
+void vp9_get_tiles_info(struct VP9Decoder *pbi, const uint8_t *data,
+                      const uint8_t *data_end,
+                      size_t *tile_offset_size);
 
 #ifdef __cplusplus
 }  // extern "C"
